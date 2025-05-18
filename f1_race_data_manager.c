@@ -146,20 +146,91 @@ int actualizar_corredores_desde_csv(const char *archivo_csv, int modificacion_nu
         if (opcion == 's' || opcion == 'S') {
             // Abrir el archivo fuente y destino
             dat = fopen(archivo_dat, "rb");
-            FILE *general = fopen("corredores.dat", "ab");
-            if (dat != NULL && general != NULL) {
-                // Copiar los datos
-                while (fread(&corredor, sizeof(Corredor), 1, dat) == 1) {
-                    fwrite(&corredor, sizeof(Corredor), 1, general);
+            FILE *general = fopen("corredores.dat", "r+b");
+            if (dat == NULL) {
+                printf("Error al abrir el archivo temporal.\n");
+                return 1;
+            }
+            if (general == NULL) {
+                // Si el archivo no existe, crearlo
+                general = fopen("corredores.dat", "wb");
+                if (general == NULL) {
+                    printf("Error al crear el archivo general.\n");
+                    fclose(dat);
+                    return 1;
+                }
+            }
+
+            // Leer y almacenar corredores existentes
+            Corredor *corredores = NULL;
+            int contador = 0, capacidad = 10;
+            corredores = malloc(capacidad * sizeof(Corredor));
+            if (corredores == NULL) {
+                printf("Error: No se puede asignar memoria.\n");
+                fclose(dat);
+                fclose(general);
+                return 1;
+            }
+
+            // Leer corredores existentes
+            while (fread(&corredor, sizeof(Corredor), 1, general) == 1) {
+                if (contador >= capacidad) {
+                    capacidad *= 2;
+                    Corredor *temp = realloc(corredores, capacidad * sizeof(Corredor));
+                    if (temp == NULL) {
+                        printf("Error: No se puede reasignar memoria.\n");
+                        free(corredores);
+                        fclose(dat);
+                        fclose(general);
+                        return 1;
+                    }
+                    corredores = temp;
+                }
+                corredores[contador++] = corredor;
+            }
+
+            // Agregar nuevos corredores sin duplicar
+            while (fread(&corredor, sizeof(Corredor), 1, dat) == 1) {
+                int duplicado = 0;
+                for (int i = 0; i < contador; i++) {
+                    if (corredores[i].numero_corredor == corredor.numero_corredor) {
+                        duplicado = 1;
+                        break;
+                    }
+                }
+                if (!duplicado) {
+                    if (contador >= capacidad) {
+                        capacidad *= 2;
+                        Corredor *temp = realloc(corredores, capacidad * sizeof(Corredor));
+                        if (temp == NULL) {
+                            printf("Error: No se puede reasignar memoria.\n");
+                            free(corredores);
+                            fclose(dat);
+                            fclose(general);
+                            return 1;
+                        }
+                        corredores = temp;
+                    }
+                    corredores[contador++] = corredor;
+                }
+            }
+
+            // Reescribir el archivo general con todos los corredores sin duplicados
+            fclose(general);
+            general = fopen("corredores.dat", "wb");
+            if (general != NULL) {
+                for (int i = 0; i < contador; i++) {
+                    fwrite(&corredores[i], sizeof(Corredor), 1, general);
                 }
                 printf("Corredores añadidos al archivo general correctamente.\n");
                 fclose(general);
-            } else {
-                printf("Error al copiar datos al archivo general.\n");
             }
-            if (dat != NULL) {
-                fclose(dat);
-            }
+            free(corredores);
+        } else {
+            printf("Error al copiar datos al archivo general.\n");
+        }
+        if (dat != NULL) {
+            fclose(dat);
         }
         return 1;
     } else {
@@ -298,30 +369,72 @@ int actualizar_tiempos_desde_csv(const char *archivo_csv, int modificacion_num) 
 void mostrar_corredores() {
     FILE *dat;
     Corredor corredor;
+    Corredor *corredores = NULL;
+    int contador = 0, capacidad = 10;
+    
     // Verificar si el archivo existe
     if (!archivo_existe("corredores.dat")) {
         printf("El archivo corredores.dat no existe. No hay datos para mostrar.\n");
         return;
     }
+
     dat = fopen("corredores.dat", "rb");
     if (dat == NULL) {
         printf("Error: No se puede abrir el archivo de corredores.\n");
         return;
     }
+
+    // Asignar memoria inicial
+    corredores = malloc(capacidad * sizeof(Corredor));
+    if (corredores == NULL) {
+        printf("Error: No se puede asignar memoria.\n");
+        fclose(dat);
+        return;
+    }
+
+    // Leer todos los corredores y almacenarlos sin duplicados
+    while (fread(&corredor, sizeof(Corredor), 1, dat) == 1) {
+        int duplicado = 0;
+        // Verificar si este corredor ya existe
+        for (int i = 0; i < contador; i++) {
+            if (corredores[i].numero_corredor == corredor.numero_corredor) {
+                duplicado = 1;
+                break;
+            }
+        }
+
+        if (!duplicado) {
+            if (contador >= capacidad) {
+                capacidad *= 2;
+                Corredor *temp = realloc(corredores, capacidad * sizeof(Corredor));
+                if (temp == NULL) {
+                    printf("Error: No se puede reasignar memoria.\n");
+                    free(corredores);
+                    fclose(dat);
+                    return;
+                }
+                corredores = temp;
+            }
+            corredores[contador++] = corredor;
+        }
+    }
+    fclose(dat);
+
     esperar(5);
     printf("Lista de Corredores:\n");
     printf("------------------------------------------\n");
     printf("Número | Nombre  | Apellido | Escudería\n");
     printf("------------------------------------------\n");
-    int contador = 0;
-    while (fread(&corredor, sizeof(Corredor), 1, dat) == 1) {
+
+    // Mostrar corredores sin duplicados
+    for (int i = 0; i < contador; i++) {
         printf("%6d | %-7s | %-8s | %s\n", 
-               corredor.numero_corredor, 
-               corredor.nombre, 
-               corredor.apellido, 
-               corredor.escuderia);
-        contador++;
+               corredores[i].numero_corredor, 
+               corredores[i].nombre, 
+               corredores[i].apellido, 
+               corredores[i].escuderia);
     }
+
     esperar(5);
     if (contador == 0) {
         printf("No hay corredores registrados.\n");
@@ -329,7 +442,8 @@ void mostrar_corredores() {
         printf("------------------------------------------\n");
         printf("Total de corredores: %d\n", contador);
     }
-    fclose(dat);
+
+    free(corredores);
 }
 // Función para comparar dos tiempos (para qsort)
 int comparar_tiempos(const void *a, const void *b) {
@@ -342,12 +456,9 @@ int comparar_tiempos(const void *a, const void *b) {
     }
 
     // Si algún tiempo es 0, debe ir al final de su vuelta (descalificado)
-    if (tiempoA->tiempo == 0.0 && tiempoB->tiempo != 0.0) return 1;  // A va después
-    if (tiempoB->tiempo == 0.0 && tiempoA->tiempo != 0.0) return -1; // B va después
-    
-    // Si ambos tiempos son 0, mantener el orden original
-    if (tiempoA->tiempo == 0.0 && tiempoB->tiempo == 0.0) return 0;
-    
+    if (tiempoA->tiempo == 0.0) return 1;  // A va después
+    if (tiempoB->tiempo == 0.0) return -1; // B va después
+
     // Ordenamiento normal por tiempo para la misma vuelta
     if (tiempoA->tiempo < tiempoB->tiempo) return -1;
     if (tiempoA->tiempo > tiempoB->tiempo) return 1;
@@ -437,11 +548,17 @@ void mostrar_tiempos() {
     for (int i = 0; i < cont_vuelta0; i++) {
         int minutos = (int)(vuelta0[i].tiempo / 60);
         float segundos = vuelta0[i].tiempo - (minutos * 60);
-        printf("%6d | %15d | %d:%.3f\n", 
-               i + 1, 
-               vuelta0[i].numero_corredor, 
-               minutos, 
-               segundos);
+        if (vuelta0[i].tiempo == 0.0) {
+            printf("%6d | %15d | No tiempo\n", 
+                   i + 1, 
+                   vuelta0[i].numero_corredor);
+        } else {
+            printf("%6d | %15d | %d:%.3f\n", 
+                   i + 1, 
+                   vuelta0[i].numero_corredor, 
+                   minutos, 
+                   segundos);
+        }
     }
     free(vuelta0);
 
@@ -459,11 +576,17 @@ void mostrar_tiempos() {
         if (tiempos[i].numero_vuelta > 0) {
             int minutos = (int)(tiempos[i].tiempo / 60);
             float segundos = tiempos[i].tiempo - (minutos * 60);
-            printf("%6d | %15d | %d:%.3f\n", 
-                   tiempos[i].numero_vuelta,
-                   tiempos[i].numero_corredor,
-                   minutos,
-                   segundos);
+            if (tiempos[i].tiempo == 0.0) {
+                printf("%6d | %15d | No tiempo\n", 
+                       tiempos[i].numero_vuelta,
+                       tiempos[i].numero_corredor);
+            } else {
+                printf("%6d | %15d | %d:%.3f\n", 
+                       tiempos[i].numero_vuelta,
+                       tiempos[i].numero_corredor,
+                       minutos,
+                       segundos);
+            }
         }
     }
 

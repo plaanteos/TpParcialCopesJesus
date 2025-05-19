@@ -160,7 +160,6 @@ int actualizar_corredores_desde_csv(const char *archivo_csv, int modificacion_nu
                     return 1;
                 }
             }
-
             // Leer y almacenar corredores existentes
             Corredor *corredores = NULL;
             int contador = 0, capacidad = 10;
@@ -171,7 +170,6 @@ int actualizar_corredores_desde_csv(const char *archivo_csv, int modificacion_nu
                 fclose(general);
                 return 1;
             }
-
             // Leer corredores existentes
             while (fread(&corredor, sizeof(Corredor), 1, general) == 1) {
                 if (contador >= capacidad) {
@@ -188,7 +186,6 @@ int actualizar_corredores_desde_csv(const char *archivo_csv, int modificacion_nu
                 }
                 corredores[contador++] = corredor;
             }
-
             // Agregar nuevos corredores sin duplicar
             while (fread(&corredor, sizeof(Corredor), 1, dat) == 1) {
                 int duplicado = 0;
@@ -214,7 +211,6 @@ int actualizar_corredores_desde_csv(const char *archivo_csv, int modificacion_nu
                     corredores[contador++] = corredor;
                 }
             }
-
             // Reescribir el archivo general con todos los corredores sin duplicados
             fclose(general);
             general = fopen("corredores.dat", "wb");
@@ -358,7 +354,6 @@ int actualizar_tiempos_desde_csv(const char *archivo_csv, int modificacion_num) 
                     return 1;
                 }
             }
-
             // Leer y almacenar tiempos existentes
             Tiempo *tiempos_existentes = NULL;
             int contador = 0, capacidad = 10;
@@ -369,7 +364,6 @@ int actualizar_tiempos_desde_csv(const char *archivo_csv, int modificacion_num) 
                 fclose(general);
                 return 1;
             }
-
             // Leer tiempos existentes
             while (fread(&tiempo, sizeof(Tiempo), 1, general) == 1) {
                 if (contador >= capacidad) {
@@ -386,7 +380,6 @@ int actualizar_tiempos_desde_csv(const char *archivo_csv, int modificacion_num) 
                 }
                 tiempos_existentes[contador++] = tiempo;
             }
-
             int tiempos_nuevos = 0;
             int tiempos_duplicados = 0;
             int total_existentes = contador;
@@ -420,7 +413,6 @@ int actualizar_tiempos_desde_csv(const char *archivo_csv, int modificacion_num) 
                     tiempos_nuevos++;
                 }
             }
-
             // Reescribir el archivo general con todos los tiempos sin duplicados
             fclose(general);
             general = fopen("tiempos.dat", "wb");
@@ -454,19 +446,16 @@ void mostrar_corredores() {
     Corredor corredor;
     Corredor *corredores = NULL;
     int contador = 0, capacidad = 10;
-    
     // Verificar si el archivo existe
     if (!archivo_existe("corredores.dat")) {
         printf("El archivo corredores.dat no existe. No hay datos para mostrar.\n");
         return;
     }
-
     dat = fopen("corredores.dat", "rb");
     if (dat == NULL) {
         printf("Error: No se puede abrir el archivo de corredores.\n");
         return;
     }
-
     // Asignar memoria inicial
     corredores = malloc(capacidad * sizeof(Corredor));
     if (corredores == NULL) {
@@ -474,7 +463,6 @@ void mostrar_corredores() {
         fclose(dat);
         return;
     }
-
     // Leer todos los corredores y almacenarlos sin duplicados
     while (fread(&corredor, sizeof(Corredor), 1, dat) == 1) {
         int duplicado = 0;
@@ -485,7 +473,6 @@ void mostrar_corredores() {
                 break;
             }
         }
-
         if (!duplicado) {
             if (contador >= capacidad) {
                 capacidad *= 2;
@@ -502,13 +489,11 @@ void mostrar_corredores() {
         }
     }
     fclose(dat);
-
     esperar(5);
     printf("Lista de Corredores:\n");
     printf("------------------------------------------\n");
     printf("Número | Nombre  | Apellido | Escudería\n");
     printf("------------------------------------------\n");
-
     // Mostrar corredores sin duplicados
     for (int i = 0; i < contador; i++) {
         printf("%6d | %-7s | %-8s | %s\n", 
@@ -517,7 +502,6 @@ void mostrar_corredores() {
                corredores[i].apellido, 
                corredores[i].escuderia);
     }
-
     esperar(5);
     if (contador == 0) {
         printf("No hay corredores registrados.\n");
@@ -525,23 +509,19 @@ void mostrar_corredores() {
         printf("------------------------------------------\n");
         printf("Total de corredores: %d\n", contador);
     }
-
     free(corredores);
 }
 // Función para comparar dos tiempos (para qsort)
 int comparar_tiempos(const void *a, const void *b) {
     Tiempo *tiempoA = (Tiempo *)a;
     Tiempo *tiempoB = (Tiempo *)b;
-
     // Si las vueltas son diferentes, ordenar por vuelta
     if (tiempoA->numero_vuelta != tiempoB->numero_vuelta) {
         return tiempoA->numero_vuelta - tiempoB->numero_vuelta;
     }
-
     // Si algún tiempo es 0, debe ir al final de su vuelta (descalificado)
     if (tiempoA->tiempo == 0.0) return 1;  // A va después
     if (tiempoB->tiempo == 0.0) return -1; // B va después
-
     // Ordenamiento normal por tiempo para la misma vuelta
     if (tiempoA->tiempo < tiempoB->tiempo) return -1;
     if (tiempoA->tiempo > tiempoB->tiempo) return 1;
@@ -553,25 +533,21 @@ void mostrar_tiempos() {
     Tiempo tiempo;
     Tiempo *tiempos = NULL;
     int contador = 0, capacidad = 10;
-    
     if (!archivo_existe("tiempos.dat")) {
         printf("El archivo tiempos.dat no existe. No hay datos para mostrar.\n");
         return;
     }
-
     dat = fopen("tiempos.dat", "rb");
     if (dat == NULL) {
         printf("Error: No se puede abrir el archivo de tiempos.\n");
         return;
     }
-
     tiempos = malloc(capacidad * sizeof(Tiempo));
     if (tiempos == NULL) {
         printf("Error: No se puede asignar memoria.\n");
         fclose(dat);
         return;
     }
-
     // Leer todos los tiempos y almacenarlos sin duplicados
     while (fread(&tiempo, sizeof(Tiempo), 1, dat) == 1) {
         int duplicado = 0;
@@ -583,7 +559,6 @@ void mostrar_tiempos() {
                 break;
             }
         }
-
         if (!duplicado) {
             if (contador >= capacidad) {
                 capacidad *= 2;
@@ -600,33 +575,27 @@ void mostrar_tiempos() {
         }
     }
     fclose(dat);
-
     if (contador == 0) {
         printf("No hay tiempos registrados.\n");
         free(tiempos);
         return;
     }
-
     // Mostrar vuelta clasificatoria (vuelta 0)
     printf("\nClasificación Vuelta 0 (Clasificatoria):\n");
     printf("------------------------------------------\n");
     printf("Puesto | Número Corredor | Tiempo\n");
     printf("------------------------------------------\n");
-
     // Crear array temporal para la vuelta 0
     Tiempo *vuelta0 = malloc(contador * sizeof(Tiempo));
     int cont_vuelta0 = 0;
-
     // Filtrar tiempos de vuelta 0
     for (int i = 0; i < contador; i++) {
         if (tiempos[i].numero_vuelta == 0) {
             vuelta0[cont_vuelta0++] = tiempos[i];
         }
     }
-
     // Ordenar vuelta 0
     qsort(vuelta0, cont_vuelta0, sizeof(Tiempo), comparar_tiempos);
-
     // Mostrar resultados de vuelta 0
     for (int i = 0; i < cont_vuelta0; i++) {
         int minutos = (int)(vuelta0[i].tiempo / 60);
@@ -644,16 +613,13 @@ void mostrar_tiempos() {
         }
     }
     free(vuelta0);
-
     // Mostrar tiempos de las demás vueltas
     printf("\nTiempos de las demás vueltas:\n");
     printf("------------------------------------------\n");
     printf("Vuelta | Número Corredor | Tiempo\n");
     printf("------------------------------------------\n");
-
     // Ordenar tiempos usando qsort con la función de comparación
     qsort(tiempos, contador, sizeof(Tiempo), comparar_tiempos);
-
     // Mostrar tiempos ordenados (excluyendo vuelta 0)
     for (int i = 0; i < contador; i++) {
         if (tiempos[i].numero_vuelta > 0) {
@@ -672,7 +638,6 @@ void mostrar_tiempos() {
             }
         }
     }
-
     free(tiempos);
 }
 // Función para borrar archivos

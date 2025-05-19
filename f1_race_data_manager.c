@@ -344,20 +344,103 @@ int actualizar_tiempos_desde_csv(const char *archivo_csv, int modificacion_num) 
         if (opcion == 's' || opcion == 'S') {
             // Abrir el archivo fuente y destino
             dat = fopen(archivo_dat, "rb");
-            FILE *general = fopen("tiempos.dat", "ab");
-            if (dat != NULL && general != NULL) {
-                // Copiar los datos
-                while (fread(&tiempo, sizeof(Tiempo), 1, dat) == 1) {
-                    fwrite(&tiempo, sizeof(Tiempo), 1, general);
+            FILE *general = fopen("tiempos.dat", "r+b");
+            if (dat == NULL) {
+                printf("Error al abrir el archivo temporal.\n");
+                return 1;
+            }
+            if (general == NULL) {
+                // Si el archivo no existe, crearlo
+                general = fopen("tiempos.dat", "wb");
+                if (general == NULL) {
+                    printf("Error al crear el archivo general.\n");
+                    fclose(dat);
+                    return 1;
                 }
-                printf("Tiempos añadidos al archivo general correctamente.\n");
-                fclose(general);
-            } else {
-                printf("Error al copiar datos al archivo general.\n");
             }
-            if (dat != NULL) {
+
+            // Leer y almacenar tiempos existentes
+            Tiempo *tiempos_existentes = NULL;
+            int contador = 0, capacidad = 10;
+            tiempos_existentes = malloc(capacidad * sizeof(Tiempo));
+            if (tiempos_existentes == NULL) {
+                printf("Error: No se puede asignar memoria.\n");
                 fclose(dat);
+                fclose(general);
+                return 1;
             }
+
+            // Leer tiempos existentes
+            while (fread(&tiempo, sizeof(Tiempo), 1, general) == 1) {
+                if (contador >= capacidad) {
+                    capacidad *= 2;
+                    Tiempo *temp = realloc(tiempos_existentes, capacidad * sizeof(Tiempo));
+                    if (temp == NULL) {
+                        printf("Error: No se puede reasignar memoria.\n");
+                        free(tiempos_existentes);
+                        fclose(dat);
+                        fclose(general);
+                        return 1;
+                    }
+                    tiempos_existentes = temp;
+                }
+                tiempos_existentes[contador++] = tiempo;
+            }
+
+            int tiempos_nuevos = 0;
+            int tiempos_duplicados = 0;
+            int total_existentes = contador;
+
+            // Agregar nuevos tiempos sin duplicar
+            while (fread(&tiempo, sizeof(Tiempo), 1, dat) == 1) {
+                int duplicado = 0;
+                for (int i = 0; i < contador; i++) {
+                    // Verifica si ya existe un tiempo para esa vuelta y corredor
+                    if (tiempos_existentes[i].numero_vuelta == tiempo.numero_vuelta &&
+                        tiempos_existentes[i].numero_corredor == tiempo.numero_corredor) {
+                        duplicado = 1;
+                        tiempos_duplicados++;
+                        break;
+                    }
+                }
+                if (!duplicado) {
+                    if (contador >= capacidad) {
+                        capacidad *= 2;
+                        Tiempo *temp = realloc(tiempos_existentes, capacidad * sizeof(Tiempo));
+                        if (temp == NULL) {
+                            printf("Error: No se puede reasignar memoria.\n");
+                            free(tiempos_existentes);
+                            fclose(dat);
+                            fclose(general);
+                            return 1;
+                        }
+                        tiempos_existentes = temp;
+                    }
+                    tiempos_existentes[contador++] = tiempo;
+                    tiempos_nuevos++;
+                }
+            }
+
+            // Reescribir el archivo general con todos los tiempos sin duplicados
+            fclose(general);
+            general = fopen("tiempos.dat", "wb");
+            if (general != NULL) {
+                for (int i = 0; i < contador; i++) {
+                    fwrite(&tiempos_existentes[i], sizeof(Tiempo), 1, general);
+                }
+                printf("\nResumen de la actualización:\n");
+                printf("- Tiempos existentes: %d\n", total_existentes);
+                printf("- Tiempos nuevos agregados: %d\n", tiempos_nuevos);
+                printf("- Tiempos duplicados (ignorados): %d\n", tiempos_duplicados);
+                printf("- Total de tiempos actuales: %d\n", contador);
+                fclose(general);
+            }
+            free(tiempos_existentes);
+        } else {
+            printf("No se copiaron datos al archivo general.\n");
+        }
+        if (dat != NULL) {
+            fclose(dat);
         }
         return 1;
     } else {

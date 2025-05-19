@@ -1,4 +1,5 @@
 #include "utils.h"
+
 // Estructuras para representar los datos
 typedef struct {
     int numero_corredor;
@@ -12,6 +13,15 @@ typedef struct {
     int numero_corredor;
     float tiempo;        // Tiempo en segundos
 } Tiempo;
+// Estructura para manejar los resultados finales
+typedef struct {
+    char nombre[16];
+    char apellido[16];
+    char escuderia[16];
+    int numero_corredor;
+    float tiempo_total;
+    int vueltas_completadas;
+} ResultadoFinal;
 // Función para verificar si un archivo existe
 int archivo_existe(const char* nombre_archivo) {
     FILE* archivo = fopen(nombre_archivo, "r");
@@ -21,6 +31,7 @@ int archivo_existe(const char* nombre_archivo) {
     }
     return 0;
 }
+// La función utf8() ya está definida in utils.h
 // Función para leer el archivo de configuración
 int leer_configuracion(char *app_nombre, char *circuito, char *version) {
     FILE *config;
@@ -192,7 +203,6 @@ int actualizar_corredores_desde_csv(const char *archivo_csv, int modificacion_nu
                 for (int i = 0; i < contador; i++) {
                     if (corredores[i].numero_corredor == corredor.numero_corredor) {
                         duplicado = 1;
-                        break;
                     }
                 }
                 if (!duplicado) {
@@ -393,7 +403,6 @@ int actualizar_tiempos_desde_csv(const char *archivo_csv, int modificacion_num) 
                         tiempos_existentes[i].numero_corredor == tiempo.numero_corredor) {
                         duplicado = 1;
                         tiempos_duplicados++;
-                        break;
                     }
                 }
                 if (!duplicado) {
@@ -470,7 +479,6 @@ void mostrar_corredores() {
         for (int i = 0; i < contador; i++) {
             if (corredores[i].numero_corredor == corredor.numero_corredor) {
                 duplicado = 1;
-                break;
             }
         }
         if (!duplicado) {
@@ -556,7 +564,6 @@ void mostrar_tiempos() {
             if (tiempos[i].numero_vuelta == tiempo.numero_vuelta && 
                 tiempos[i].numero_corredor == tiempo.numero_corredor) {
                 duplicado = 1;
-                break;
             }
         }
         if (!duplicado) {
@@ -576,6 +583,7 @@ void mostrar_tiempos() {
     }
     fclose(dat);
     if (contador == 0) {
+        esperar(5);
         printf("No hay tiempos registrados.\n");
         free(tiempos);
         return;
@@ -702,8 +710,122 @@ void borrar_tiempos() {
         printf("No se han borrado los tiempos.\n");
     }
 }
+// Función para comparar resultados finales (para qsort)
+int comparar_resultados(const void *a, const void *b) {
+    ResultadoFinal *resultadoA = (ResultadoFinal *)a;
+    ResultadoFinal *resultadoB = (ResultadoFinal *)b;
+    
+    // Si tienen diferente número de vueltas, el que completó más vueltas va primero
+    if (resultadoA->vueltas_completadas != resultadoB->vueltas_completadas) {
+        return resultadoB->vueltas_completadas - resultadoA->vueltas_completadas;
+    }
+    
+    // Si tienen las mismas vueltas, ordenar por tiempo total
+    if (resultadoA->tiempo_total < resultadoB->tiempo_total) return -1;
+    if (resultadoA->tiempo_total > resultadoB->tiempo_total) return 1;
+    return 0;
+}
+
+void mostrar_resultados_finales() {
+    esperar(5);
+    FILE *dat_corredores, *dat_tiempos;
+    Corredor corredor;
+    Tiempo tiempo;
+    ResultadoFinal *resultados = NULL;
+    int num_corredores = 0, capacidad = 10;
+    // Verificar si los archivos existen
+    if (!archivo_existe("corredores.dat") || !archivo_existe("tiempos.dat")) {
+        printf("Error: Faltan archivos necesarios (corredores.dat o tiempos.dat).\n");
+        return;
+    }
+    // Abrir archivos
+    dat_corredores = fopen("corredores.dat", "rb");
+    dat_tiempos = fopen("tiempos.dat", "rb");
+    if (dat_corredores == NULL || dat_tiempos == NULL) {
+        printf("Error al abrir los archivos.\n");
+        return;
+    }
+    // Asignar memoria inicial
+    resultados = malloc(capacidad * sizeof(ResultadoFinal));
+    if (resultados == NULL) {
+        printf("Error: No se puede asignar memoria.\n");
+        fclose(dat_corredores);
+        fclose(dat_tiempos);
+        return;
+    }
+    // Leer corredores y crear estructura de resultados
+    while (fread(&corredor, sizeof(Corredor), 1, dat_corredores) == 1) {
+        int encontrado = 0;
+        // Verificar si ya tenemos este corredor
+        for (int i = 0; i < num_corredores; i++) {
+            if (resultados[i].numero_corredor == corredor.numero_corredor) {
+                encontrado = 1;
+            }
+        }
+        if (!encontrado) {
+            if (num_corredores >= capacidad) {
+                capacidad *= 2;
+                ResultadoFinal *temp = realloc(resultados, capacidad * sizeof(ResultadoFinal));
+                if (temp == NULL) {
+                    printf("Error: No se puede reasignar memoria.\n");
+                    free(resultados);
+                    fclose(dat_corredores);
+                    fclose(dat_tiempos);
+                    return;
+                }
+                resultados = temp;
+            }
+            
+            // Inicializar nuevo corredor
+            strcpy(resultados[num_corredores].nombre, corredor.nombre);
+            strcpy(resultados[num_corredores].apellido, corredor.apellido);
+            strcpy(resultados[num_corredores].escuderia, corredor.escuderia);
+            resultados[num_corredores].numero_corredor = corredor.numero_corredor;
+            resultados[num_corredores].tiempo_total = 0;
+            resultados[num_corredores].vueltas_completadas = 0;
+            num_corredores++;
+        }
+    }
+    // Leer tiempos y acumularlos para cada corredor
+    while (fread(&tiempo, sizeof(Tiempo), 1, dat_tiempos) == 1) {
+        if (tiempo.numero_vuelta > 0) { // No contar la vuelta de clasificación
+            for (int i = 0; i < num_corredores; i++) {
+                if (resultados[i].numero_corredor == tiempo.numero_corredor) {
+                    if (tiempo.tiempo > 0) { // Solo contar tiempos válidos
+                        resultados[i].tiempo_total += tiempo.tiempo;
+                        resultados[i].vueltas_completadas++;
+                    }
+                }
+            }
+        }
+    }
+    // Ordenar resultados
+    qsort(resultados, num_corredores, sizeof(ResultadoFinal), comparar_resultados);
+    // Mostrar resultados
+    printf("\n===========================================\n");
+    printf("          RESULTADOS FINALES              \n");
+    printf("===========================================\n\n");
+    for (int i = 0; i < num_corredores; i++) {
+        int minutos_total = (int)(resultados[i].tiempo_total / 60);
+        float segundos_total = resultados[i].tiempo_total - (minutos_total * 60); 
+        printf("%d. %s %s\n", i + 1, resultados[i].nombre, resultados[i].apellido);
+        printf("   Escudería: %s\n", resultados[i].escuderia);
+        printf("   Vueltas completadas: %d\n", resultados[i].vueltas_completadas);
+        if (resultados[i].vueltas_completadas > 0) {
+            printf("   Tiempo total: %d:%06.3f\n", minutos_total, segundos_total);
+        } else {
+            printf("   No completó ninguna vuelta\n");
+        }
+        printf("-------------------------------------------\n");
+    }
+    // Liberar memoria y cerrar archivos
+    free(resultados);
+    fclose(dat_corredores);
+    fclose(dat_tiempos);
+}
 // Función principal
 int main() {
+    utf8();
     int opcion;
     char app_nombre[16], circuito[16], version[6];
     char archivo_csv[50];
@@ -716,6 +838,7 @@ int main() {
         strcpy(circuito, "Default");
         strcpy(version, "1.0");
     }
+    mostrar_animacion_f1();
     printf("Bienvenido a %s v%s\n", app_nombre, version);
     printf("Circuito: %s\n\n", circuito);
     while (ejecutar) {
@@ -726,7 +849,8 @@ int main() {
         printf("4. Mostrar tiempos\n");
         printf("5. Borrar corredores\n");
         printf("6. Borrar tiempos\n");
-        printf("7. Salir\n");
+        printf("7. mostrar resultados finales\n");
+        printf("8. Salir\n");
         printf("Elija una opción: ");
         if (scanf("%d", &opcion) != 1) {
             // Limpiar el buffer de entrada si la entrada no es un número
@@ -736,12 +860,12 @@ int main() {
         }
         switch (opcion) {
             case 1:
-                printf("Ingrese el nombre del archivo CSV de corredores: ");
+                printf("Ingrese el nombre del archivo CSV de corredores (nombredelarchivo.csv): ");
                 scanf("%49s", archivo_csv);
                 actualizar_corredores_desde_csv(archivo_csv, modificacion_num++);
                 break;
             case 2:
-                printf("Ingrese el nombre del archivo CSV de tiempos: ");
+                printf("Ingrese el nombre del archivo CSV de tiempos (nombredelarchivo.csv): ");
                 scanf("%49s", archivo_csv);
                 actualizar_tiempos_desde_csv(archivo_csv, modificacion_num++);
                 break;
@@ -758,6 +882,9 @@ int main() {
                 borrar_tiempos();
                 break;
             case 7:
+                mostrar_resultados_finales();
+                break;
+            case 8:
                 printf("Saliendo del programa...\n");
                 esperar(5);
                 ejecutar = 0;
